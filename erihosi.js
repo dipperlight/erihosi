@@ -9,6 +9,7 @@
 */
 function dicea(dice,target,range=1,sided=10){  
   if(range>sided) {return null}
+  if(dice==0&&target==0){return 1}
   if(dice<=0)     {return 0}
   if(target>dice) {return 0}
   if(range<=0)    {return 0}
@@ -18,7 +19,7 @@ function dicea(dice,target,range=1,sided=10){
   const pp = p**target;
   const qq = q**(dice-target);
 
-  return cmb_(dice,target) * pp * qq; 
+  return small_round(cmb_(dice,target) * pp * qq); 
 }
 
 /**
@@ -123,9 +124,9 @@ function sub_erihosi_surprised_(area,base,first_dice){
 function erihosi(dice,target,difficulty,bomb=false){
   let sum=0;
   const pat = hosipat_(dice,target);
-  pat.forEach(function(arr_st_succ){
-      let star = arr_st_succ[0];
-      let success = arr_st_succ[1];
+  pat.forEach(function(success,star){
+      if (success+star>dice){return}  // 星＋通常成功がダイス数を超える（実現不可能）場合はスキップ
+
       let star_c = dicea(dice,star,1,10-(bomb?1:0));
       let succ_c = diceb(dice-star,success,10-difficulty,9-(bomb?1:0));
       sum += star_c * succ_c;
@@ -161,7 +162,6 @@ function erihosi_alchemy_bomb(dice,target,difficulty,resist,danger=false){
   },0 );
 }
 
-
 /**
 エリ星爆死率
 @param {number} dice - ダイス数
@@ -179,6 +179,124 @@ function erihosi_bomb(dice,resist,danger=false){
   return 1-live_c;
 }
 
+/**
+エリ星調合成功率 爆死は失敗扱い　テスト不十分
+@param {number} skill - 技力
+@param {number} mind - 心力
+@param {number} mp - 調合前のMP
+@param {number} hp - 調合前のHP
+@param {number} klass - 階級　学科生:0、学士・公式:1、修士:2
+@param {number} pot_rank - 使用する鍋のランク
+@param {number} pot_process - 使用する鍋の加工値
+@param {number} pot_magic - 使用する鍋の魔力値
+@param {boolean} sage - 賢者フラグ
+@param {boolean} artisan - 職人フラグ
+@param {boolean} danger - 強い鍋フラグ
+@param {boolean} hard -硬い鍋フラグ
+@param {boolean} pure - 清い鍋フラグ
+@return {number} 成功率の二次配列、、1次キー(行方向)が判定種別、2次キー(列方向)が調合目標値
+@customfunction
+*/
+function erihosi_alchemy_bomb_array(skill,mind,mp,hp,klass,pot_rank,pot_process,pot_magic,sage,artisan,danger,hard,pure){
+// 引数多すぎてテストしたくない…
+  const dice = erihosi_dice(skill+mp,pot_magic+(danger?pot_process:0))
+  return dice.map((die,type) =>{
+    return [...Array(20).keys()].map(x => {
+      const target = x+1;
+      const difficulty = 10-pot_rank + (target>10+klass?target-(10+klass):0)
+      let resist = hp + mp*(sage?3:2) + (artisan?10:0) + (hard?skill:0) + (pure?mind:0);
+      if (type%2==1) {resist-=(sage?3:2)}
+      if (type>=4)   {resist-=5}
+      return erihosi_alchemy_bomb(die,target,difficulty,resist,danger);
+    })    
+  })
+}
+
+/**
+エリ星判定ダイス数
+@param {number} param - 判定の基本ステータス値
+@param {number} item_magic - 魔力仕様時の追加ダイス
+@param {number} optional - その他ダイス補正、省略時0
+
+@return {object} ダイス数の配列[短縮,短縮魔力,通常,通常魔力,延長,延長魔力]
+@customfunction
+*/
+function erihosi_dice(param,magic_bonus,optional=0){
+  return [
+    Math.floor((param+optional)/2),
+    Math.floor((param+magic_bonus+optional)/2),
+    param+optional,
+    param+magic_bonus+optional,
+    param*2+optional,
+    param*2+magic_bonus+optional
+  ]
+}
+
+/**
+エリ星採取成功率
+@param {object} physical - 体力
+@param {object} item_magic - 道具魔力
+@param {number} rank - 探索対象ランク
+@param {number} difficulty - 難易度
+@param {boolean} area - 道具適正と地形の一致
+@param {boolean} element - 道具属性と採取対象属性の一致
+@param {number} bonus - 階級補正、学科生:0,学士・公式:1,修士:2
+
+@return {object} 成功率の二次元配列、1次キー(行方向)が判定種別、2次キー(列方向)がレア種別
+@customfunction
+*/
+function erihosi_gather_array (physical,item_magic,rank,difficulty,area,element,bonus){
+  const dice = erihosi_dice(physical,item_magic)
+  return dice.map((die,idx) => {
+    let sum = new Array(3).fill(0);
+    const cb = [0,2].includes(idx)?0:bonus
+    const target = rank*2-cb
+    const rare = [0,2,4].map(x=>erihosi_rare_target(rank,x,area,element,cb));
+
+    for (let star=0;star<=die;star++){ //星の数0～ダイス
+      for (let success=Math.max(target-star*2,0);success<=die-star;success++){//成功の数、0or通常成功の最低必要数～ダイス-星
+        for (let accident=0;accident<=die-star-success;accident++){//アクシデントの数、0～ダイス-星-成功
+          const chance = dicea(die                 ,star      ,1             ,10 ) * // 星がstar個出る率
+                         dicea(die-star            ,accident  ,1             ,9  ) * // アクシデントがaccident個出る率
+                         dicea(die-star-accident   ,success   ,10-difficulty ,8  )   // 成功がsuccess個出る率
+
+          const achieved = star*2+success+accident
+          if (achieved>=rare[2]){
+            sum[2] += chance;
+          }
+          else if (achieved>=rare[1]){
+            sum[1] += chance;
+          }
+          else {
+            sum[0] += chance
+          }
+        }
+      }
+    }
+    return sum; 
+  })
+}
+
+/**
+ エリ星レア採取目標値
+ エリ星採取成功率
+@param {number} rank - 探索対象ランク
+@param {number} rare - レア採取、[0,2,4]のいずれかを指定、省略で0（通常品）
+@param {boolean} area - 道具適正と地形の一致
+@param {boolean} element - 道具属性と採取対象属性の一致
+@param {number} bonus - 階級補正、魔力・延長どちらもしない場合は0
+
+@return {number} 目標値（レア品の場合達成値＋アクシデント）
+@customfunction
+ */
+function erihosi_rare_target (rank,rare,area,element,bonus) {
+  if (rare==0){return rank*2  - bonus}
+  else if (rare==2) {return rank+7 - (area?2:0) - (element?1:0) - bonus}
+  else if (rare==4) {retu
+  rn rank+23 - (area?4:0) - (element?2:0) - bonus}
+  else {return -99} // エラー
+
+ }
 
 /**********************
   以下、主にサブルーチン
@@ -187,8 +305,11 @@ function erihosi_bomb(dice,resist,danger=false){
 // 爆発ダメージテーブル
 const bomb_table = [4,5,6,4,5,6,4,5,6,4,5,6,4,5,6,3,4,5,6,7,3,4,5,6,7,3,4,5,6,7,3,4,5,6,7,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8];
 
-// 丸め桁数、アンダーフロー回避のため
-const round=10**10; 
+// 丸め関数、オーバーフロー回避のため
+const digit=10**10; 
+function small_round(x){
+  return Math.round(x*digit)/digit
+}
 
 
 // アクシデント数毎の生存率の配列を返す,要素数はダイス数+1、キーをアクシデント数とする[確率,確率,...]
@@ -201,7 +322,7 @@ function bomb_rate_(dice,resist,danger){
     const rate = accident_rate[1];
     accident_sum[accident] += rate;
   }
-  return accident_sum.map((x, idx) => x==0?0:Math.round(x*round)/round*dicea(dice,idx));
+  return accident_sum.map((x, idx) => x==0?0:small_round(x)*dicea(dice,idx));
 }
 
 
@@ -247,15 +368,10 @@ function actual_dice_(dice,difficulty){
 
 
 // 目標値によって必要な星と星以外の成功数の組み合わせパターンを返す
-//　戻り値はダイス数分の配列 [[星個数,通常成功個数],[星個数,通常成功個数],...]
+//　戻り値はキーを星個数としたダイス数+1の配列 [通常成功個,通常成功個],...]
 function hosipat_(dice,target){
-  let pattern = [];
-  let not_star = target;
-  for (let i=0;i<=dice;i++) {
-    pattern.push([i,not_star<0 ? 0 : not_star]);
-    not_star-=2;
-  }
-  return pattern;
+  if(dice<=0){return []}
+  return [...Array(dice+1).keys()].map(star => Math.max(target-star*2,0))
 }
 
 
