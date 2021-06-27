@@ -126,90 +126,11 @@ function erihosi(dice,target,difficulty,bomb=false){
   const pat = hosipat_(dice,target);
   pat.forEach(function(success,star){
       if (success+star>dice){return}  // 星＋通常成功がダイス数を超える（実現不可能）場合はスキップ
-
       let star_c = dicea(dice,star,1,10-(bomb?1:0));
       let succ_c = diceb(dice-star,success,10-difficulty,9-(bomb?1:0));
       sum += star_c * succ_c;
   })
   return sum; 
-}
-
-/**
-エリ星調合成功率 
-@param {number} dice - ダイス数、難易度超過による減衰は自動計算
-@param {number} target - 目標値
-@param {number} difficulty - 難易度、加工値・階級等による変動後の値を入力
-@return {number} 成功率
-@customfunction
-*/
-function erihosi_alchemy(dice,target,difficulty,bomb=false){
-  return erihosi(actual_dice_(dice,difficulty), target, difficulty>10?10:difficulty,bomb)
-}
-
-/**
-エリ星調合成功率 爆死は失敗扱い
-@param {number} dice - ダイス数、難易度超過による減衰は自動計算
-@param {number} target - 目標値
-@param {number} difficulty - 難易度、加工値・階級等による変動後の値を入力
-@param {number} resist - 爆破耐性
-@param {boolean} danger - 危険鍋フラグ、省略時false
-@return {number} 成功率
-@customfunction
-*/
-function erihosi_alchemy_bomb(dice,target,difficulty,resist,danger=false){
-  return  bomb_rate_(dice,resist,danger).reduce((sum,c,idx) => {
-    return sum + c*erihosi_alchemy(dice-idx,target,difficulty,true);
-  },0 );
-}
-
-/**
-エリ星爆死率
-@param {number} dice - ダイス数
-@param {number} resist - 爆破耐性
-@param {boolean} danger - 危険鍋フラグ、省略時false
-@return {number} 爆死率
-@customfunction
-*/
-function erihosi_bomb(dice,resist,danger=false){
-  let accident_rate = bomb_rate_(dice,resist,danger)
-  let live_c = 0;
-  for (const accident in accident_rate){
-    live_c += accident_rate[accident];
-  }
-  return 1-live_c;
-}
-
-/**
-エリ星調合成功率 爆死は失敗扱い　テスト不十分
-@param {number} skill - 技力
-@param {number} mind - 心力
-@param {number} mp - 調合前のMP
-@param {number} hp - 調合前のHP
-@param {number} klass - 階級　学科生:0、学士・公式:1、修士:2
-@param {number} pot_rank - 使用する鍋のランク
-@param {number} pot_process - 使用する鍋の加工値
-@param {number} pot_magic - 使用する鍋の魔力値
-@param {boolean} sage - 賢者フラグ
-@param {boolean} artisan - 職人フラグ
-@param {boolean} danger - 強い鍋フラグ
-@param {boolean} hard -硬い鍋フラグ
-@param {boolean} pure - 清い鍋フラグ
-@return {number} 成功率の二次配列、、1次キー(行方向)が判定種別、2次キー(列方向)が調合目標値
-@customfunction
-*/
-function erihosi_alchemy_bomb_array(skill,mind,mp,hp,klass,pot_rank,pot_process,pot_magic,sage,artisan,danger,hard,pure){
-// 引数多すぎてテストしたくない…
-  const dice = erihosi_dice(skill+mp,pot_magic+(danger?pot_process:0))
-  return dice.map((die,type) =>{
-    return [...Array(20).keys()].map(x => {
-      const target = x+1;
-      const difficulty = 10-pot_rank + (target>10+klass?target-(10+klass):0)
-      let resist = hp + mp*(sage?3:2) + (artisan?10:0) + (hard?skill:0) + (pure?mind:0);
-      if (type%2==1) {resist-=(sage?3:2)}
-      if (type>=4)   {resist-=5}
-      return erihosi_alchemy_bomb(die,target,difficulty,resist,danger);
-    })    
-  })
 }
 
 /**
@@ -292,15 +213,206 @@ function erihosi_gather_array (physical,item_magic,rank,difficulty,area,element,
 function erihosi_rare_target (rank,rare,area,element,bonus) {
   if (rare==0){return rank*2  - bonus}
   else if (rare==2) {return rank+7 - (area?2:0) - (element?1:0) - bonus}
-  else if (rare==4) {retu
-  rn rank+23 - (area?4:0) - (element?2:0) - bonus}
+  else if (rare==4) {return rank+23 - (area?4:0) - (element?2:0) - bonus}
   else {return -99} // エラー
 
  }
 
+
+/**
+エリ星調合成功率 
+@param {number} dice - ダイス数、難易度超過による減衰は自動計算
+@param {number} target - 目標値
+@param {number} difficulty - 難易度、加工値・階級等による変動後の値を入力
+@return {number} 成功率
+@customfunction
+*/
+function erihosi_alchemy(dice,target,difficulty,bomb=false){
+  return erihosi(actual_dice_(dice,difficulty), target, difficulty>10?10:difficulty,bomb)
+}
+
+/**
+エリ星調合成功率 爆死は失敗扱い
+@param {number} dice - ダイス数、難易度超過による減衰は自動計算
+@param {number} target - 目標値
+@param {number} difficulty - 難易度、加工値・階級等による変動後の値を入力
+@param {number} resist - 爆破耐性
+@param {boolean} danger - 危険鍋フラグ、省略時false
+@return {number} 成功率
+@customfunction
+*/
+function erihosi_alchemy_bomb(dice,target,difficulty,resist,danger=false){
+  return  bomb_rate_(dice,resist,danger).reduce((sum,c,idx) => {
+    return sum + c*erihosi_alchemy(dice-idx,target,difficulty,true);
+  },0 );
+}
+
+/**
+エリ星調合成功率 爆死は失敗扱い
+@param {number} dice - ダイス数、難易度超過による減衰は自動計算
+@param {number} difficulty - 目標1の調合時の難易度
+@param {number} resist - 爆破耐性
+@param {number} klass - 階級　学科生:0、学士・公式:1、修士:2
+@param {boolean} danger - 危険鍋フラグ、省略時false
+@return {number} 調合目標値[1-20]をキーとした20要素の成功率の配列
+@customfunction
+*/
+function erihosi_alchemy_bomb_array(dice,difficulty,resist,klass,danger){
+  return [...Array(20).keys()].map(x => {
+    const target = x+1;
+    const act_diff = difficulty + (target>(10+klass)?target-(10+klass):0)
+    return erihosi_alchemy_bomb(dice,target,act_diff,resist,danger);
+  })    
+}
+
+/**
+エリ星爆死率
+@param {number} dice - ダイス数
+@param {number} resist - 爆破耐性
+@param {boolean} danger - 危険鍋フラグ、省略時false
+@return {number} 爆死率
+@customfunction
+*/
+function erihosi_bomb(dice,resist,danger=false){
+  let accident_rate = bomb_rate_(dice,resist,danger)
+  let live_c = 0;
+  for (const accident in accident_rate){
+    live_c += accident_rate[accident];
+  }
+  return 1-live_c;
+}
+
+/**
+エリ星魔法攻撃調査（実測用）
+@param {number} dice -ダイス数
+@param {number} trial - 試行回数、省略時1000
+@param {number} max - 上限値、これ以上の値はmaxとして扱う、省略時1000
+@param {number} group - 出目結果をまとめるの範囲、0~group、group~group*2...をひとまとめとする、0指定は不可、省略時5
+@param {boolean} battle - 戦闘ダイス化フラグ、出目1は-3，出目10は15として扱う、省略時true
+
+@return {object} 実測結果の出目合計出現率を配列で返す、要素数はmin(max,dice*10or15)/group
+@customfunction
+*/
+function erihosi_dice_sum_trial(dice,trial=1000,max=1000,group=5,battle=true){
+  let result = new Array(Math.floor((Math.min(max,dice*(battle?15:10))/group))+1).fill(0);
+    for (let i=0;i<=trial;i++){
+      let total_dam = 0;
+      for (let j=1;j<=dice;j++){
+        const deme = Math.floor( Math.random() * 11 );
+        total_dam += battle?(deme==10?15 : deme==1?-3 : deme) : deme;
+    }
+    total_dam = total_dam>=max?max : total_dam<0?0 : total_dam
+    result[Math.floor(total_dam/group)] ++;
+  }
+  return result.map(x=>x/trial);
+}
+
+/**
+エリ星魔法攻撃調査（実測用）
+@param {number} dice -ダイス数
+@param {number} trial - 試行回数、省略時1000
+@param {number} max - 上限値、これ以上の値はmaxとして扱う、省略時1000
+@param {boolean} battle - 戦闘ダイス化フラグ、出目1は-3，出目10は15として扱う、省略時true
+@param {number} group - 出目結果を丸める範囲、指定の単位で切り捨てる、省略時1
+
+@return {object} 実測結果の出目合計を配列で返す、要素数はtrial/group
+@customfunction
+*/
+function erihosi_dice_trial(dice=20,trial=1000,max=1000,battle=true,group=1){
+  let result = [];
+    for (let i=0;i<=trial;i++){
+      let total_dam = 0;
+      for (let j=1;j<=dice;j++){
+        const deme = Math.floor( Math.random() * 11 );
+        total_dam += battle?(deme==10?15 : deme==1?-3 : deme) : deme;
+    }
+    total_dam = total_dam>=max?max : total_dam<0?0 : total_dam
+    total_dam = group>1?Math.floor(total_dam/group)*group : total_dam
+    result.push(total_dam);
+  }
+  return result;
+}
+
+/**
+エリ星魔法攻撃調査（実測用）
+@param {number} min_dice -最小ダイス数
+@param {number} max_dice -最大ダイス数
+@param {number} trial - 試行回数、省略時1000
+@param {number} max - 上限値、これ以上の値はmaxとして扱う、省略時1000
+@param {boolean} battle - 戦闘ダイス化フラグ、出目1は-3，出目10は15として扱う、省略時true
+@param {number} group - 出目結果を丸める範囲、指定の単位で切り捨てる、省略時1
+
+@return {object} 実測結果の出目合計を配列で返す、要素数は[max_dice-min_dice][trial/group]
+@customfunction
+*/
+function erihosi_dice_sum_trial_arr(min_dice=1,max_dice=25,trial=1000,max=1000,battle=true,group=1){
+  let result = [];  
+  for (let i = min_dice;i<=max_dice;i++){
+    result.push(erihosi_dice_sum_trial(i,trial,max,battle,group))
+  }
+  return transpose(result)
+}
+
+
+
+/**
+エリ星魔法攻撃調査（実測用）
+@param {number} min_dice -最小ダイス数
+@param {number} max_dice -最大ダイス数
+@param {number} trial - 試行回数、省略時1000
+@param {number} max - 上限値、これ以上の値はmaxとして扱う、省略時1000
+@param {boolean} battle - 戦闘ダイス化フラグ、出目1は-3，出目10は15として扱う、省略時true
+
+@return {object} 実測結果の出目合計の平均値・中央値・最頻値値を配列で返す、要素数は[3][max_dice-min_dice]
+@customfunction
+*/
+function erihosi_dice_statistics(min_dice=1,max_dice=25,trial=1000,max=1000,battle=true){
+  let result = [new Array(max_dice-min_dice+1),new Array(max_dice-min_dice+1),new Array(max_dice-min_dice+1)]
+  for (let i = min_dice;i<=max_dice;i++){
+    const dice_arr = erihosi_dice_trial(i,trial,max,battle);
+    result[0][i-min_dice] = average(dice_arr);
+    result[1][i-min_dice] = median(dice_arr);
+    result[2][i-min_dice] = mode(dice_arr);
+  }
+  return result;
+}
+
 /**********************
   以下、主にサブルーチン
 **********************/
+
+// 二次元配列の転置
+const transpose = a => a[a.length-1].map((_, c) => a.map(r => r[c]));
+
+// 平均
+const average = a => a.reduce((sum,cur) => sum + cur)/a.length;
+// 中央
+const median = a => {
+  const b = [...a].sort((x,y)=>x-y);
+  const half = Math.floor(b.length/2);
+  return b.length%2==1?b[half] : (b[half-1]+b[half])/2
+}
+// 最頻
+const mode = a => {
+  let mode_val = null;
+  let count = {};
+  for (const val of a) {
+    if (count[val]) {
+      count[val] ++;
+    } else {
+      count[val] = 1;
+    }
+  }
+  let max = 0;
+  for (const key in count) {
+    if (count[key] > max) {
+      max = count[key];
+      mode_val = key;
+    }
+  }
+  return mode_val;
+}
+
 
 // 爆発ダメージテーブル
 const bomb_table = [4,5,6,4,5,6,4,5,6,4,5,6,4,5,6,3,4,5,6,7,3,4,5,6,7,3,4,5,6,7,3,4,5,6,7,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8,2,3,4,5,6,7,8];
@@ -408,4 +520,11 @@ function cmb_(a,b) {
     com=com*(a-i)/(i+1)
   }
   return com;
+}
+
+
+// 階乗関数
+function factorialize(num) {
+  if (num === 0) { return 1; }
+  return  [...Array(num).keys()].reduce((a,b) => {return a*=b+1},1)
 }
